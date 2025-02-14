@@ -110,8 +110,8 @@ class PasswordManagerGUI:
         self.output_area = scrolledtext.ScrolledText(main_frame, height=12, wrap=tk.WORD)
         self.output_area.grid(row=3, column=0, columnspan=2, pady=10, sticky=tk.EW)
 
-        # Disable manual editing
-        self.output_area.config(state="normaldi")
+        # # Disable manual editing
+        # self.output_area.config(state="normal")
 
     def load_passwords(self):
         status, message = self.pm.load_from_file()
