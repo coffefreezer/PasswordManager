@@ -28,6 +28,8 @@ class PasswordManager:
         return len(errors_list) == 0, errors_list  # (T,errors_list) or (F,errors_list)
 
     def add_password(self, service, password):
+        if service.lower() in self.passwords:
+            return False, f"Password for {service} is already stored"
         is_valid, errors_list = self.verify_password(password)
         if is_valid:
             self.passwords[service] = password[::-1]
@@ -49,6 +51,11 @@ class PasswordManager:
             self.passwords[service] = new_password[::-1]
             return True, f"Password for {service} changed successfully!"
         return False, "\n".join(errors_list)
+    def delete_password(self, service):
+        if service not in self.passwords:
+            return False, "Service not found"
+        del self.passwords[service]
+        return True, f"Password for {service} deleted successfully!"
 
     def save_to_file(self):
         try:
@@ -69,13 +76,14 @@ class PasswordManager:
             return False, f"Error loading passwords: {str(e)}"
 
 
+
 class PasswordManagerGUI:
     def __init__(self, master):
         self.master = master
         self.pm = PasswordManager()
 
-        master.title("Password Manager ")
-        master.geometry("600x400")
+        master.title("Password Manager")
+        master.geometry("720x400")
         self.create_widgets()
         self.load_passwords()
 
@@ -93,10 +101,20 @@ class PasswordManagerGUI:
         self.service_entry.grid(row=0, column=1, padx=5, pady=5)
 
         # Password Input
+        # ttk.Label(main_frame, text="Password:").grid(row=1, column=0, sticky=tk.W)
+        # self.password_entry = ttk.Entry(main_frame, width=35, show="•")
+        # self.password_entry.grid(row=1, column=1, padx=5, pady=5)
         ttk.Label(main_frame, text="Password:").grid(row=1, column=0, sticky=tk.W)
-        self.password_entry = ttk.Entry(main_frame, width=35, show="•")
+
+        self.password_var = tk.StringVar()
+        self.password_entry = ttk.Entry(main_frame, width=35, textvariable=self.password_var, show="•")
         self.password_entry.grid(row=1, column=1, padx=5, pady=5)
 
+        # Eye Button (Toggle)
+        self.show_password = False
+        self.eye_icon = tk.PhotoImage(file="eye_closed.png")  # Load an eye icon image
+        self.eye_button = ttk.Button(main_frame, image=self.eye_icon, command=self.toggle_password, width=3)
+        self.eye_button.grid(row=1, column=2, padx=5)
         # Buttons
         btn_frame = ttk.Frame(main_frame)
         btn_frame.grid(row=2, column=0, columnspan=2, pady=15)
@@ -104,13 +122,14 @@ class PasswordManagerGUI:
         ttk.Button(btn_frame, text="Add Password", command=self.add_password).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Get Password", command=self.get_password).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Change Password", command=self.change_password).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Delete Password", command=self.delete_password).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Exit", command=self.exit).pack(side=tk.LEFT, padx=5)
 
         # Output Area
         self.output_area = scrolledtext.ScrolledText(main_frame, height=12, wrap=tk.WORD)
         self.output_area.grid(row=3, column=0, columnspan=2, pady=10, sticky=tk.EW)
 
-        # # Disable manual editing
+        # #      Disable manual editing
         # self.output_area.config(state="normal")
 
     def load_passwords(self):
@@ -122,32 +141,42 @@ class PasswordManagerGUI:
         self.password_entry.delete(0, tk.END)
 
     def add_password(self):
-        service = self.service_entry.get().strip()
+        service = self.service_entry.get().strip().lower()
         password = self.password_entry.get().strip()
 
         if not service or not password:
-            messagebox.showwarning("Add Password-Input Error", "Both fields are required!")
+            messagebox.showerror("Add Password-Input Error", "Both fields are required!")
             return
 
         success, message = self.pm.add_password(service, password)
         self.output_area.insert(tk.END, message + "\n\n")
         if success: self.clear_entries()
 
+    def toggle_password(self):
+        """Toggles password visibility"""
+        if self.show_password:
+            self.password_entry.config(show="•")
+            self.eye_icon.config(file="eye_closed.png")  # Update icon
+        else:
+            self.password_entry.config(show="")
+            self.eye_icon.config(file="eye_open.png")  # Update icon
+        self.show_password = not self.show_password
+
     def get_password(self):
-        service = self.service_entry.get().strip()
+        service = self.service_entry.get().strip().lower()
         if not service:
-            messagebox.showwarning("Input Error", "Please enter a service name")
+            messagebox.showwarning("Input Error", "Please enter a service name!")
             return
 
         password, message = self.pm.get_password(service)
         self.output_area.insert(tk.END, message + "\n")
-        if password:
-            self.password_entry.delete(0, tk.END)
-            self.password_entry.insert(0, password)
-        self.output_area.insert(tk.END, "\n")
+        # if password:
+        #     self.password_entry.delete(0, tk.END)
+        #     self.password_entry.insert(0, password)
+        # self.output_area.insert(tk.END, "\n")
 
-    def change_password(self):  # Here
-        service = self.service_entry.get().strip()
+    def change_password(self):
+        service = self.service_entry.get().strip().lower()
         new_password = self.password_entry.get().strip()
 
         if not service or not new_password:
@@ -157,6 +186,18 @@ class PasswordManagerGUI:
         success, message = self.pm.change_password(service, new_password)
         self.output_area.insert(tk.END, message + "\n\n")
         if success: self.clear_entries()
+
+    def delete_password(self):
+        service = self.service_entry.get().strip().lower()
+
+        if not service:
+            messagebox.showwarning("Input Error", "Please enter a service name!")
+            return
+
+        success, message = self.pm.delete_password(service)
+        self.output_area.insert(tk.END, message + "\n\n")
+        if success: self.clear_entries()
+
 
     def exit(self):
         status, message = self.pm.save_to_file()
