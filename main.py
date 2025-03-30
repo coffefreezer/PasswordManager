@@ -2,6 +2,7 @@ import json
 import time
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
+import ceaser_encrypt
 
 
 class PasswordManager:
@@ -28,16 +29,19 @@ class PasswordManager:
         return len(errors_list) == 0, errors_list  # (T,errors_list) or (F,errors_list)
 
     def add_password(self, service, password):
+        if service.lower() in self.passwords:
+            return False, f"Password for {service} is already stored"
         is_valid, errors_list = self.verify_password(password)
         if is_valid:
-            self.passwords[service] = password[::-1]
+            self.passwords[service] = ceaser_encrypt.encrypt(password)
             return True, f"Password for {service} added successfully!"
 
         return False, "\n".join(errors_list)
 
     def get_password(self, service):
         if service in self.passwords:
-            return self.passwords[service][::-1], f"Password for {service}: {self.passwords[service][::-1]}"
+            decrypted_password = ceaser_encrypt.decrypt(self.passwords[service])
+            return decrypted_password, f"Password for {service}: {decrypted_password}"
         return None, "Password not found for this service"
 
     def change_password(self, service, new_password):
@@ -46,9 +50,14 @@ class PasswordManager:
 
         is_valid, errors_list = self.verify_password(new_password)
         if is_valid:
-            self.passwords[service] = new_password[::-1]
+            self.passwords[service] = ceaser_encrypt.encrypt(new_password)
             return True, f"Password for {service} changed successfully!"
         return False, "\n".join(errors_list)
+    def delete_password(self, service):
+        if service not in self.passwords:
+            return False, "Service not found"
+        del self.passwords[service]
+        return True, f"Password for {service} deleted successfully!"
 
     def save_to_file(self):
         try:
@@ -69,13 +78,15 @@ class PasswordManager:
             return False, f"Error loading passwords: {str(e)}"
 
 
+
+
 class PasswordManagerGUI:
     def __init__(self, master):
         self.master = master
         self.pm = PasswordManager()
 
-        master.title("Password Manager ")
-        master.geometry("600x400")
+        master.title("Password Manager")
+        master.geometry("720x400")
         self.create_widgets()
         self.load_passwords()
 
@@ -96,6 +107,10 @@ class PasswordManagerGUI:
         ttk.Label(main_frame, text="Password:").grid(row=1, column=0, sticky=tk.W)
         self.password_entry = ttk.Entry(main_frame, width=35, show="•")
         self.password_entry.grid(row=1, column=1, padx=5, pady=5)
+        ttk.Label(main_frame, text="Password:").grid(row=1, column=0, sticky=tk.W)
+
+
+
 
         # Buttons
         btn_frame = ttk.Frame(main_frame)
@@ -104,14 +119,14 @@ class PasswordManagerGUI:
         ttk.Button(btn_frame, text="Add Password", command=self.add_password).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Get Password", command=self.get_password).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Change Password", command=self.change_password).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Delete Password", command=self.delete_password).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Exit", command=self.exit).pack(side=tk.LEFT, padx=5)
 
         # Output Area
         self.output_area = scrolledtext.ScrolledText(main_frame, height=12, wrap=tk.WORD)
         self.output_area.grid(row=3, column=0, columnspan=2, pady=10, sticky=tk.EW)
 
-        # # Disable manual editing
-        # self.output_area.config(state="normal")
+
 
     def load_passwords(self):
         status, message = self.pm.load_from_file()
@@ -122,32 +137,33 @@ class PasswordManagerGUI:
         self.password_entry.delete(0, tk.END)
 
     def add_password(self):
-        service = self.service_entry.get().strip()
+        service = self.service_entry.get().strip().lower()
         password = self.password_entry.get().strip()
 
         if not service or not password:
-            messagebox.showwarning("Add Password-Input Error", "Both fields are required!")
+            messagebox.showerror("Add Password-Input Error", "Both fields are required!")
             return
 
         success, message = self.pm.add_password(service, password)
         self.output_area.insert(tk.END, message + "\n\n")
         if success: self.clear_entries()
 
+
     def get_password(self):
-        service = self.service_entry.get().strip()
+        service = self.service_entry.get().strip().lower()
         if not service:
-            messagebox.showwarning("Input Error", "Please enter a service name")
+            messagebox.showwarning("Input Error", "Please enter a service name!")
             return
 
         password, message = self.pm.get_password(service)
         self.output_area.insert(tk.END, message + "\n")
-        if password:
-            self.password_entry.delete(0, tk.END)
-            self.password_entry.insert(0, password)
-        self.output_area.insert(tk.END, "\n")
+        # if password:
+        #     self.password_entry.delete(0, tk.END)
+        #     self.password_entry.insert(0, password)
+        # self.output_area.insert(tk.END, "\n")
 
-    def change_password(self):  # Here
-        service = self.service_entry.get().strip()
+    def change_password(self):
+        service = self.service_entry.get().strip().lower()
         new_password = self.password_entry.get().strip()
 
         if not service or not new_password:
@@ -157,6 +173,18 @@ class PasswordManagerGUI:
         success, message = self.pm.change_password(service, new_password)
         self.output_area.insert(tk.END, message + "\n\n")
         if success: self.clear_entries()
+
+    def delete_password(self):
+        service = self.service_entry.get().strip().lower()
+
+        if not service:
+            messagebox.showwarning("Input Error", "Please enter a service name!")
+            return
+
+        success, message = self.pm.delete_password(service)
+        self.output_area.insert(tk.END, message + "\n\n")
+        if success: self.clear_entries()
+
 
     def exit(self):
         status, message = self.pm.save_to_file()
